@@ -1,4 +1,6 @@
-use scylla::{Session, SessionBuilder, prepared_statement::PreparedStatement};
+use scylla::{Session, SessionBuilder, prepared_statement::PreparedStatement, batch::Batch, query::Query};
+use crate::repository::UserRepository;
+use crate::models::{UserInsertRequests, UserResponse, UserRow};
 
 pub struct Statements{
     pub insert_user: String,
@@ -14,7 +16,7 @@ pub struct ScyllaClient{
 
 impl ScyllaClient{
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>>{
-        let uri = "127.0.0.1:9042".to_string();
+        let uri = std::env::var("SCYLLA_URI").unwrap_or_else(|_|"127.0.0.1:9042".to_string());
         let session = SessionBuilder::new()
             .known_node(uri)
             .build()
@@ -23,12 +25,15 @@ impl ScyllaClient{
         Self::create_users_table(&session).await?;
         Self::create_indexes(&session).await?;
 
-        let mut get_user_by_name = session.prepare("SELECT * FROM project.users WHERE name = ?").await?;
-        get_user_by_name.set_page_size(10);
-        let mut get_user_by_age = session.prepare("SELECT * FROM project.users WHERE age = ?").await?;
-        get_user_by_age.set_page_size(10);
-        let mut get_user_by_name_age = session.prepare("SELECT * FROM project.users WHERE name = ? AND age = ? ALLOW FILTERING").await?;
-        get_user_by_name_age.set_page_size(10);
+        let get_user_by_name = session.prepare(
+            Query::new("SELECT * FROM project.users WHERE name = ?").with_page_size(100)
+        ).await?;
+        let get_user_by_age = session.prepare(
+            Query::new("SELECT * FROM project.users WHERE age = ?").with_page_size(100)
+        ).await?;
+        let get_user_by_name_age = session.prepare(
+            Query::new("SELECT * FROM project.users WHERE name = ? AND age = ? ALLOW FILTERING").with_page_size(100)
+        ).await?;
 
         Ok(Self{
             session,
@@ -70,5 +75,57 @@ impl ScyllaClient{
 
         Ok(())
     }
+}
 
+
+#[async_trait]
+impl UserRepository for ScyllaClient{
+    async fn insert_users(&self, user_insert_requests: UserInsertRequests) -> Result<(), Box<dyn std::error::Error>>{
+        let mut batch: Batch = Default::default();
+        let user_rows: Vec<UserRow> = user_insert_requests.users.into_iter().map(|user_req|{
+            batch.append_statement(self.statements.insert_user.clone().as_ref());
+            user_req.to_user_row()
+        }).collect();
+        let prepared_batch = self.session.prepare_batch(&batch).await?;
+        self.session.batch(&prepared_batch, user_rows).await?;
+        Ok(())
+    }
+    async fn get_users_by_name(&self, name: String, next_page_token: Option<String>) -> Result<UserResponse, Box<dyn std::error::Error>>{
+        let prepared_statement = &self.statements.get_user_by_name;
+        let result = match next_page_token { 
+            Some(token) => self.session.execute_paged(prepared_statement, (name, ), Some(bytes::Bytes::from(token))).await?,
+            None => self.session.execute(prepared_statement, (name, )).await?,
+        };
+        let user_rows : Vec<UserRow> = result.rows.unwrap().into_iter().map(|row| row.into_typed::<UserRow>().unwrap()).collect();
+        Ok(UserResponse{
+            users: user_rows,
+            next_page_token: None
+        })
+    }
+    async fn get_users_by_age(&self, age: u32, next_page_token: Option<String>) -> Result<UserResponse, Box<dyn std::error::Error>>{
+        let prepared_statement = &self.statements.get_user_by_age;
+        let result = match next_page_token {
+            Some(token) => self.session.execute_paged(prepared_statement, (age as i32, ), Some(bytes::Bytes::from(token))).await?,
+            None => self.session.execute(prepared_statement, (age as i32, )).await?,
+        };
+        let user_rows : Vec<UserRow> = result.rows.unwrap().into_iter().map(|row| row.into_typed::<UserRow>().unwrap()).collect();
+        println!("{:?}", result.paging_state.clone().unwrap().to_vec());
+        Ok(UserResponse{
+            users: user_rows,
+            next_page_token: None
+        })
+    }
+    async fn get_users_by_name_age(&self, name: String, age: u32, next_page_token: Option<String>)  -> Result<UserResponse, Box<dyn std::error::Error>>{
+        let prepared_statement = &self.statements.get_user_by_name_age;
+        let result = match next_page_token {
+            Some(token) => self.session.execute_paged(prepared_statement, (name, age as i32 ), Some(bytes::Bytes::from(token))).await?,
+            None => self.session.execute(prepared_statement, (name, age as i32 )).await?,
+        };
+
+        let user_rows : Vec<UserRow> = result.rows.unwrap().into_iter().map(|row| row.into_typed::<UserRow>().unwrap()).collect();
+        Ok(UserResponse{
+            users: user_rows,
+            next_page_token: None
+        })
+    }
 }
