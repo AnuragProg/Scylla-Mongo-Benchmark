@@ -1,0 +1,27 @@
+version: '3'
+
+
+
+services:
+  app:
+    restart: always
+    depends_on:
+      - mongo
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
+    networks:
+      - application
+    command: ./target/release/benchmark -d mongo
+
+
+  mongo:
+    image: mongo
+    networks:
+      - application
+
+
+networks:
+  application:

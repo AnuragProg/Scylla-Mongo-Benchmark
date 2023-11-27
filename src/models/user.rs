@@ -4,6 +4,23 @@ use serde::ser::{SerializeStruct, Serializer};
 use serde::de::{Visitor, Deserializer};
 use uuid::Uuid;
 
+// for mongo
+#[derive(Serialize, Deserialize)]
+pub struct UserDoc{
+    pub id: String,
+    pub name: String,
+    pub age: i32
+}
+
+impl UserDoc{
+    pub fn to_user_row(self) -> UserRow{
+        UserRow{
+            id: Uuid::parse_str(&self.id).unwrap(),
+            name: self.name,
+            age: self.age,
+        }
+    }
+}
 
 #[derive(ValueList, FromRow, Debug)]
 pub struct UserRow{
@@ -79,6 +96,13 @@ impl UserInsertRequest{
             age: self.age,
         }
     }
+    pub fn to_user_doc(self) -> UserDoc{
+        UserDoc{
+            id: uuid::Uuid::new_v4().to_string(),
+            name: self.name,
+            age: self.age,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,6 +114,10 @@ impl UserInsertRequests{
     pub fn to_user_rows(self) -> Vec<UserRow>{
         self.users.into_iter().map(|user_row| user_row.to_user_row()).collect()
     }
+    pub fn to_user_docs(self) -> Vec<UserDoc>{
+        self.users.into_iter().map(|user_row| user_row.to_user_doc()).collect()
+    }
+    
 }
 
 #[derive(Serialize, Deserialize)]

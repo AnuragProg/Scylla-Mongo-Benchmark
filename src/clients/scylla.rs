@@ -26,19 +26,19 @@ impl ScyllaClient{
         Self::create_indexes(&session).await?;
 
         let get_user_by_name = session.prepare(
-            Query::new("SELECT * FROM project.users WHERE name = ?").with_page_size(100)
+            Query::new("SELECT * FROM benchmark.users WHERE name = ?").with_page_size(100)
         ).await?;
         let get_user_by_age = session.prepare(
-            Query::new("SELECT * FROM project.users WHERE age = ?").with_page_size(100)
+            Query::new("SELECT * FROM benchmark.users WHERE age = ?").with_page_size(100)
         ).await?;
         let get_user_by_name_age = session.prepare(
-            Query::new("SELECT * FROM project.users WHERE name = ? AND age = ? ALLOW FILTERING").with_page_size(100)
+            Query::new("SELECT * FROM benchmark.users WHERE name = ? AND age = ? ALLOW FILTERING").with_page_size(100)
         ).await?;
 
         Ok(Self{
             session,
             statements: Statements{
-                insert_user: "INSERT INTO project.users(id, name, age) VALUES(?, ?, ?);".to_string(),
+                insert_user: "INSERT INTO benchmark.users(id, name, age) VALUES(?, ?, ?);".to_string(),
                 get_user_by_name,
                 get_user_by_age,
                 get_user_by_name_age
@@ -48,13 +48,13 @@ impl ScyllaClient{
 
     async fn create_keyspace(session: &Session) -> Result<scylla::QueryResult, scylla::transport::errors::QueryError> {
         session.query("
-            CREATE KEYSPACE IF NOT EXISTS project WITH REPLICATION = {'class':'NetworkTopologyStrategy', 'replication_factor': 1};
+            CREATE KEYSPACE IF NOT EXISTS benchmark WITH REPLICATION = {'class':'NetworkTopologyStrategy', 'replication_factor': 1};
         ", &[]).await
     }
 
     async fn create_users_table(session: &Session) -> Result<scylla::QueryResult, scylla::transport::errors::QueryError> {
         session.query("
-            CREATE TABLE IF NOT EXISTS project.users(
+            CREATE TABLE IF NOT EXISTS benchmark.users(
                 id uuid,
                 name text,
                 age int,
@@ -66,11 +66,11 @@ impl ScyllaClient{
 
     async fn create_indexes(session: &Session)-> Result<(), scylla::transport::errors::QueryError> {
         session.query("
-            CREATE INDEX IF NOT EXISTS users_by_name ON project.users(name);
+            CREATE INDEX IF NOT EXISTS users_by_name ON benchmark.users(name);
         ", &[]).await?;
 
         session.query("
-            CREATE INDEX IF NOT EXISTS users_by_age ON project.users(age);
+            CREATE INDEX IF NOT EXISTS users_by_age ON benchmark.users(age);
         ", &[]).await?;
 
         Ok(())
@@ -109,7 +109,6 @@ impl UserRepository for ScyllaClient{
             None => self.session.execute(prepared_statement, (age as i32, )).await?,
         };
         let user_rows : Vec<UserRow> = result.rows.unwrap().into_iter().map(|row| row.into_typed::<UserRow>().unwrap()).collect();
-        println!("{:?}", result.paging_state.clone().unwrap().to_vec());
         Ok(UserResponse{
             users: user_rows,
             next_page_token: None

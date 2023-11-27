@@ -3,6 +3,7 @@ pub mod models;
 pub mod routes;
 pub mod repository;
 use clap::Parser;
+use std::net::IpAddr;
 #[macro_use] extern crate rocket;
 
 
@@ -28,6 +29,7 @@ async fn main() -> Result<(), rocket::Error> {
     };
     rocket::build()
         .configure(rocket::Config{
+            address: IpAddr::from([0,0,0,0]),
             port: 3000,
             ..rocket::Config::default()
         })

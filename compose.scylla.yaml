@@ -1,0 +1,26 @@
+version: '3'
+
+
+services:
+  app:
+    depends_on:
+      - scylla
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
+    networks:
+      - application
+    command: ./target/release/benchmark -d scylla
+
+
+  scylla:
+    image: scylladb/scylla
+    networks:
+      - application
+    command: --smp 2 --developer-mode 1 
+
+
+networks:
+  application:

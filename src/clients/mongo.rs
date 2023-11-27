@@ -1,23 +1,22 @@
 use mongodb::{Client, Database, Collection, options::{FindOptions, ClientOptions}, bson::doc, IndexModel};
-use futures::stream::TryStreamExt;
-use crate::models::*;
+use crate::models::{UserDoc, UserInsertRequests, UserResponse};
 use crate::repository::UserRepository;
 
 
 pub struct MongoClient{
     session: Client,
     db: Database,
-    users_collection: Collection<UserRow>
+    users_collection: Collection<UserDoc>
 }
 
 
 
 impl MongoClient{
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>>{
-        let uri = std::env::var("MONGO_URI").unwrap_or_else(|_|"mongodb://127.0.0.1:27017".to_string());
+        let uri = std::env::var("MONGO_URI").unwrap_or_else(|_|"mongodb://localhost:27017".to_string());
         let options = ClientOptions::parse(uri).await?;
         let session = Client::with_options(options)?;
-        let db = session.database("project");
+        let db = session.database("benchmark");
         let users_collection = db.collection("users");
         let name_index = IndexModel::builder()
             .keys(doc!{"name": 1})
@@ -34,7 +33,7 @@ impl MongoClient{
 #[async_trait]
 impl UserRepository for MongoClient{
     async fn insert_users(&self, user_insert_requests: UserInsertRequests) -> Result<(), Box<dyn std::error::Error>>{
-        let docs = user_insert_requests.to_user_rows();
+        let docs = user_insert_requests.to_user_docs();
         self.users_collection.insert_many(docs, None).await?;
         Ok(())
     }
@@ -43,17 +42,8 @@ impl UserRepository for MongoClient{
         let mut cursor = self.users_collection.find(doc!{"name": name}, options).await?;
         let mut count = 0;
         let mut docs = Vec::new();
-        //while let Some(document) = cursor.try_next().await?{
-        //    docs.push(document);
-        //    count += 1;
-        //    if count>100 {
-        //        break;
-        //    }
-        //}
-        while cursor.advance().await.unwrap_or(false) && count < 100{
-            if let Ok(document) = cursor.deserialize_current(){
-                docs.push(document);
-            }
+        while cursor.advance().await? && count < 100{
+            docs.push(cursor.deserialize_current()?.to_user_row());
             count += 1;
         }
         Ok(UserResponse{ users: docs, next_page_token: None })
@@ -63,20 +53,10 @@ impl UserRepository for MongoClient{
         let mut cursor = self.users_collection.find(doc!{"age": age}, options).await?;
         let mut count = 0;
         let mut docs = Vec::new();
-        while let Some(document) = cursor.try_next().await?{
-            docs.push(document);
+        while cursor.advance().await? && count < 100{
+            docs.push(cursor.deserialize_current()?.to_user_row());
             count += 1;
-            if count>100 {
-                break;
-            }
         }
-        //while cursor.advance().await.unwrap_or(false) && count < 100{
-        //    match cursor.deserialize_current(){
-        //        Ok(document) => docs.push(document),
-        //        Err(err) => println!("{}", err)
-        //    }
-        //    count += 1;
-        //}
         Ok(UserResponse{ users: docs, next_page_token: None })
     }
     async fn get_users_by_name_age(&self, name: String, age: u32, next_page_token: Option<String>)  -> Result<UserResponse, Box<dyn std::error::Error>>{
@@ -84,13 +64,10 @@ impl UserRepository for MongoClient{
         let mut cursor = self.users_collection.find(doc!{"name": name, "age": age}, options).await?;
         let mut count = 0;
         let mut docs = Vec::new();
-        while cursor.advance().await.unwrap_or(false) && count < 100{
-            if let Ok(document) = cursor.deserialize_current(){
-                docs.push(document);
-            }
+        while cursor.advance().await? && count < 100{
+            docs.push(cursor.deserialize_current()?.to_user_row());
             count += 1;
         }
         Ok(UserResponse{ users: docs, next_page_token: None })
-
     }
 }
