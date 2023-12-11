@@ -1,4 +1,4 @@
-# Benchmarking Database Performance with JMeter and Rust
+# Benchmark of Scylla and Mongo Performance with JMeter and Rust
 
 ## Overview
 This repository contains a Rust application designed to benchmark the performance of ScyllaDB and MongoDB using JMeter for load testing. The application utilizes the Rocket framework for building REST APIs and follows the repository pattern for a structured and maintainable codebase.
