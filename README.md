@@ -31,10 +31,10 @@ This repository contains a Rust application designed to benchmark the performanc
   ```
 
 ## Postman Collection
-Explore and test the API endpoints using the [Postman Collection](link_to_your_postman_collection.json).
+Explore and test the API endpoints using the [Postman Collection](https://github.com/AnuragProg/Scylla-Mongo-Benchmark/blob/main/Scylla%20Mongo%20Test.postman_collection.json).
 
 ## JMeter Test Plan
-Benchmark the performance with the [JMeter Test Plan](link_to_your_jmeter_test_plan.jmx).
+Benchmark the performance with the [JMeter Test Plan](https://github.com/AnuragProg/Scylla-Mongo-Benchmark/blob/main/Benchmark%20Test%20Plan.jmx).
 
 ## Benchmarking
 1. Use JMeter to load test the API endpoints.
